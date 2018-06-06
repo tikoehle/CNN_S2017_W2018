@@ -5,6 +5,42 @@ import numpy as np
 from cs231n.layers import *
 from cs231n.layer_utils import *
 
+############################################################################
+# TIMO: Additional helper layers similar to those in the file              #
+# cs231n/layer_utils.py. It is used in class FullyConnectedNet::loss()     #
+############################################################################
+def batchnorm_relu_forward(x, gamma, beta, bn_param):
+    """
+    Convenience layer for Batch Norm usage
+
+    Inputs:
+    - x: Input to the batchnorm layer.
+    - gamma, beta: Scale and shift parameters.
+    - bn_param: Dictionary with batchnorm_forward parameters of layer l.
+
+    Returns a tuple of:
+    - out: Output from the Batch Normalization + ReLu
+    - cache: Object to give to the backward pass
+    """
+    bn, bn_cache = batchnorm_forward(x, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(bn)
+    cache = (bn_cache, relu_cache)
+
+    return out, cache
+
+
+def batchnorm_relu_backward(dout, cache):
+    """
+    Backward pass for the batchnorm-relu convenience layer.
+    """
+    bn_cache, relu_cache = cache
+    da = relu_backward(dout, relu_cache)
+    dbn, dgamma, dbeta = batchnorm_backward(da, bn_cache)
+
+    return dbn, dgamma, dbeta
+############################################################################
+#                             END OF YOUR CODE                             #
+############################################################################
 
 class TwoLayerNet(object):
     """
@@ -194,17 +230,25 @@ class FullyConnectedNet(object):
         ############################################################################
         for l in range(self.num_layers):
             if l == 0:
+                #-----------------------------------------------------------
                 # First hidden layer l.
+                #-----------------------------------------------------------
                 fan_in, fan_out = input_dim, hidden_dims[l]
             elif l == self.num_layers - 1:
+                #-----------------------------------------------------------
                 # Output layer l.
+                #-----------------------------------------------------------
                 fan_in, fan_out = hidden_dims[l-1], num_classes
             else:
+                #-----------------------------------------------------------
                 # Any other hidden layer l.
+                #-----------------------------------------------------------
                 fan_in, fan_out = hidden_dims[l-1], hidden_dims[l]
 
             self.params['W'+str(l+1)] = weight_scale * np.random.randn(fan_in, fan_out)
-            self.params['b'+str(l+1)] = np.zeros((1, fan_out))    
+            self.params['b'+str(l+1)] = np.zeros((1, fan_out))
+            self.params['gamma'+str(l+1)] = np.ones((fan_out))
+            self.params['beta'+str(l+1)] = np.zeros((fan_out))
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -263,16 +307,37 @@ class FullyConnectedNet(object):
         # layer, etc.                                                              #
         ############################################################################
         input, forward_cache = X, {}
+
         for l in range(self.num_layers):
             l += 1
             if l < self.num_layers:
-                # Repeated L - 1 layers: {affine - [batch norm] - relu - [dropout]} x (L - 1)
+                #-----------------------------------------------------------
+                # Repeated L - 1 layers: 
+                #     {affine - [batch norm] - relu - [dropout]} x (L - 1)
+                #-----------------------------------------------------------
                 H, fc_cache = affine_forward(input, self.params['W'+str(l)], self.params['b'+str(l)])
-                out, relu_cache = relu_forward(H)
-                forward_cache[l] = (fc_cache, relu_cache)
+
+                if self.use_batchnorm:
+                    #-------------------------------------------------------
+                    # Batch Normalization + ReLU
+                    #-------------------------------------------------------
+                    out, bn_relu_cache = batchnorm_relu_forward(H,
+                                                                self.params['gamma'+str(l)], 
+                                                                self.params['beta'+str(l)],
+                                                                self.bn_params[l-1])
+                    forward_cache[l] = (fc_cache, bn_relu_cache)
+                else:
+                    #-------------------------------------------------------
+                    # ReLU
+                    #-------------------------------------------------------
+                    out, relu_cache = relu_forward(H)
+                    forward_cache[l] = (fc_cache, relu_cache)
+
                 input = out
             else:
+                #-----------------------------------------------------------
                 # Output layer: affine - softmax
+                #-----------------------------------------------------------
                 scores, forward_cache[l] = affine_forward(input, self.params['W'+str(l)], self.params['b'+str(l)])
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -312,11 +377,28 @@ class FullyConnectedNet(object):
             # Backpropate the gradient to the parameters
             #-----------------------------------------------------------
             if l == self.num_layers:
+                #-------------------------------------------------------
                 # Output layer.
+                #-------------------------------------------------------
                 dH, dW, db = affine_backward(dscores, forward_cache[l])
             else:
+                #-------------------------------------------------------
                 # Repeated L - 1 layers.
-                dH, dW, db = affine_relu_backward(dH, forward_cache[l])
+                #-------------------------------------------------------
+                if self.use_batchnorm:
+                    #---------------------------------------------------
+                    # Batch Normalization + ReLU
+                    #---------------------------------------------------
+                    fc_cache, bn_relu_cache = forward_cache[l]
+                    dbn, dgamma, dbeta = batchnorm_relu_backward(dH, bn_relu_cache)
+                    dH, dW, db = affine_backward(dbn, fc_cache)
+                    grads['gamma'+str(l)] = dgamma
+                    grads['beta'+str(l)] = dbeta
+                else:
+                    #---------------------------------------------------
+                    # ReLU
+                    #---------------------------------------------------
+                    dH, dW, db = affine_relu_backward(dH, forward_cache[l])
             #-----------------------------------------------------------
             # Add regularization gradient contribution (same factor of 0.5)
             #-----------------------------------------------------------
@@ -324,11 +406,11 @@ class FullyConnectedNet(object):
             #-----------------------------------------------------------
             # Store the Gradients
             #-----------------------------------------------------------
-            grads['W'+str(l)] = dW
             grads['b'+str(l)] = db
-        #-----------------------------------------------------------
+            grads['W'+str(l)] = dW
+        #---------------------------------------------------------------
         # Compute the total loss
-        #-----------------------------------------------------------
+        #---------------------------------------------------------------
         loss = data_loss + reg_loss
         ############################################################################
         #                             END OF YOUR CODE                             #

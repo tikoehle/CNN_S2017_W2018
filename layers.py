@@ -158,9 +158,9 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     eps = bn_param.get('eps', 1e-5)
     momentum = bn_param.get('momentum', 0.9)
 
-    N, D = x.shape
-    running_mean = bn_param.get('running_mean', np.zeros(D, dtype=x.dtype))
-    running_var = bn_param.get('running_var', np.zeros(D, dtype=x.dtype))
+    N, Dim = x.shape  # Note (Timo): renamed D to Dim because D is a graph node.
+    running_mean = bn_param.get('running_mean', np.zeros(Dim, dtype=x.dtype))
+    running_var = bn_param.get('running_var', np.zeros(Dim, dtype=x.dtype))
 
     out, cache = None, None
     if mode == 'train':
@@ -179,7 +179,37 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # variance, storing your result in the running_mean and running_var   #
         # variables.                                                          #
         #######################################################################
-        pass
+        A = 1. / N * np.sum(x, axis=0, keepdims=True)  # (1) A: mini-batch mean
+        B = x - A                                      # (2)
+        C = B ** 2                                     # (3)
+        D = 1. / N * np.sum(C, axis=0, keepdims=True)  # (4) D: mini-batch variance
+        E = np.sqrt(D + eps)                           # (5)
+        F = 1. / E                                     # (6)
+        G = F * B                                      # (7) G: normalize (x-hat)
+        H = G * gamma                                  # (8) scale
+        I = H + beta                                   # (9) I: out (y), shift
+
+        x_mean = A
+        x_var = D
+        x_norm = G
+        out = I
+
+        cache = (B, D, E, F, G, eps, gamma, beta)
+        
+        running_mean = momentum * running_mean + (1 - momentum) * x_mean
+        running_var = momentum * running_var + (1 - momentum) * x_var
+
+        # Debugging: For the bprop implementation, print the forward input 
+        # shapes for each node of the computational graph. The derivative
+        # of a node must return a local gradient of the same shape.
+        """
+        print('------- Graph nodes forward shape -------')
+        graph_nodes = {'beta':beta, 'gamma':gamma, 
+                       'A':A, 'B':B, 'C':C, 'D':D, 'E':E, 
+                       'F':F, 'G':G, 'H':H, 'I':I}
+        for n in graph_nodes.keys():
+            print('%s: %s' % (n, str(graph_nodes[n].shape)))
+        """
         #######################################################################
         #                           END OF YOUR CODE                          #
         #######################################################################
@@ -190,7 +220,10 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # then scale and shift the normalized data using gamma and beta.      #
         # Store the result in the out variable.                               #
         #######################################################################
-        pass
+        x_norm = (x - running_mean) / np.sqrt(running_var + eps) # normalize
+        y = gamma * x_norm + beta                                # scale and shift
+
+        out = y
         #######################################################################
         #                          END OF YOUR CODE                           #
         #######################################################################
@@ -226,7 +259,38 @@ def batchnorm_backward(dout, cache):
     # TODO: Implement the backward pass for batch normalization. Store the    #
     # results in the dx, dgamma, and dbeta variables.                         #
     ###########################################################################
-    pass
+    B, D, E, F, G, eps, gamma, beta = cache
+
+    N, Dim = dout.shape  # Note: renamed D to Dim because D is a graph node.
+
+    dbeta = np.sum(dout, axis=0)                          # (9)
+    dH = dout                                             # (9)
+    dgamma = np.sum(G * dH, axis=0)                       # (8)
+    dG = gamma * dH                                       # (8)
+    dF = np.sum(B * dG, axis=0, keepdims=True)            # (7)
+    dB = F * dG                                           # (7)
+    dE = -1. / E**2 * dF                                  # (6)
+    dD = 1. / (2.0 * np.sqrt(D + eps)) * dE               # (5)
+    dC = 1. / N * np.ones((N, Dim)) * dD                  # (4)
+    dB += 2. * B * dC                                     # (3) sum dB gradients
+    dA = -1. * np.sum(dB, axis=0, keepdims=True)          # (2)
+    dx = 1. * dB                                          # (2)
+    dx += 1. / N * np.ones((N, Dim)) * dA                 # (1) sum dx gradients
+
+    """
+    print('------- Graph nodes derivative shape -------')
+    print('dbeta: %s' % str(dbeta.shape))
+    print('dH: %s' % str(dH.shape))
+    print('dgamma: %s' % str(dgamma.shape))
+    print('dG: %s' % str(dG.shape))
+    print('dF: %s' % str(dF.shape))
+    print('dE: %s' % str(dE.shape))
+    print('dD: %s' % str(dD.shape))
+    print('dC: %s' % str(dC.shape))
+    print('dB: %s' % str(dB.shape))
+    print('dA: %s' % str(dA.shape))
+    print('dx: %s' % str(dx.shape))
+    """
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -256,7 +320,12 @@ def batchnorm_backward_alt(dout, cache):
     # should be able to compute gradients with respect to the inputs in a     #
     # single statement; our implementation fits on a single 80-character line.#
     ###########################################################################
-    pass
+    B, D, E, F, G, eps, gamma, beta = cache
+    N, Dim = dout.shape
+
+    dbeta = np.sum(dout, axis=0)
+    dgamma = np.sum(G * dout, axis=0)
+    dx = (1. / N) * gamma * (D + eps)**(-1. / 2.) * (N * dout - np.sum(dout, axis=0) - B * (D + eps)**(-1.0) * np.sum(dout * B, axis=0))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
