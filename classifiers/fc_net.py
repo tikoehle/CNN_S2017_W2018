@@ -7,7 +7,7 @@ from cs231n.layer_utils import *
 
 ############################################################################
 # TIMO: Additional helper layers similar to those in the file              #
-# cs231n/layer_utils.py. It is used in class FullyConnectedNet::loss()     #
+# cs231n/layer_utils.py. It is used in FullyConnectedNet::loss().          #
 ############################################################################
 def batchnorm_relu_forward(x, gamma, beta, bn_param):
     """
@@ -229,26 +229,37 @@ class FullyConnectedNet(object):
         # parameters should be initialized to zero.                                #
         ############################################################################
         for l in range(self.num_layers):
+            #print("num_layers:%s l:%s" % (self.num_layers, l))
             if l == 0:
                 #-----------------------------------------------------------
-                # First hidden layer l.
+                # First hidden layer.
                 #-----------------------------------------------------------
                 fan_in, fan_out = input_dim, hidden_dims[l]
+                if self.use_batchnorm:
+                    self.params['gamma'+str(l+1)] = np.ones((fan_out))
+                    self.params['beta'+str(l+1)] = np.zeros((fan_out))
+                    #print("gamma%s %s" % (str(l+1), self.params['gamma'+str(l+1)].shape))
+                    #print("beta%s %s" % (str(l+1), self.params['beta'+str(l+1)].shape))
             elif l == self.num_layers - 1:
                 #-----------------------------------------------------------
-                # Output layer l.
+                # Output layer. (no Batchnorm)
                 #-----------------------------------------------------------
                 fan_in, fan_out = hidden_dims[l-1], num_classes
             else:
                 #-----------------------------------------------------------
-                # Any other hidden layer l.
+                # All other hidden layers.
                 #-----------------------------------------------------------
                 fan_in, fan_out = hidden_dims[l-1], hidden_dims[l]
+                if self.use_batchnorm:
+                    self.params['gamma'+str(l+1)] = np.ones((fan_out))
+                    self.params['beta'+str(l+1)] = np.zeros((fan_out))
+                    #print("gamma%s %s" % (str(l+1), self.params['gamma'+str(l+1)].shape))
+                    #print("beta%s %s" % (str(l+1), self.params['beta'+str(l+1)].shape))
 
             self.params['W'+str(l+1)] = weight_scale * np.random.randn(fan_in, fan_out)
             self.params['b'+str(l+1)] = np.zeros((1, fan_out))
-            self.params['gamma'+str(l+1)] = np.ones((fan_out))
-            self.params['beta'+str(l+1)] = np.zeros((fan_out))
+            #print("W%s %s" % (str(l+1), self.params['W'+str(l+1)].shape))
+            #print("b%s %s" % (str(l+1), self.params['b'+str(l+1)].shape))
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
