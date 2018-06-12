@@ -336,13 +336,28 @@ class FullyConnectedNet(object):
                                                                 self.params['gamma'+str(l)], 
                                                                 self.params['beta'+str(l)],
                                                                 self.bn_params[l-1])
-                    forward_cache[l] = (fc_cache, bn_relu_cache)
+                    if self.use_dropout:
+                        #-------------------------------------------------------
+                        # + Dropout
+                        #-------------------------------------------------------
+                        out, dropout_cache = dropout_forward(out, self.dropout_param)
+                        forward_cache[l] = (fc_cache, bn_relu_cache, dropout_cache)
+                    else:
+                        forward_cache[l] = (fc_cache, bn_relu_cache)
                 else:
                     #-------------------------------------------------------
                     # ReLU
                     #-------------------------------------------------------
                     out, relu_cache = relu_forward(H)
-                    forward_cache[l] = (fc_cache, relu_cache)
+
+                    if self.use_dropout:
+                        #-------------------------------------------------------
+                        # + Dropout
+                        #-------------------------------------------------------
+                        out, dropout_cache = dropout_forward(out, self.dropout_param)
+                        forward_cache[l] = (fc_cache, relu_cache, dropout_cache)
+                    else:
+                        forward_cache[l] = (fc_cache, relu_cache)
 
                 input = out
             else:
@@ -397,19 +412,38 @@ class FullyConnectedNet(object):
                 # Repeated L - 1 layers.
                 #-------------------------------------------------------
                 if self.use_batchnorm:
-                    #---------------------------------------------------
-                    # Batch Normalization + ReLU
-                    #---------------------------------------------------
-                    fc_cache, bn_relu_cache = forward_cache[l]
-                    dbn, dgamma, dbeta = batchnorm_relu_backward(dH, bn_relu_cache)
-                    dH, dW, db = affine_backward(dbn, fc_cache)
-                    grads['gamma'+str(l)] = dgamma
-                    grads['beta'+str(l)] = dbeta
+                    if self.use_dropout:
+                        #---------------------------------------------------
+                        # Batch Normalization + ReLU + Dropout
+                        #---------------------------------------------------
+                        fc_cache, bn_relu_cache, dropout_cache = forward_cache[l]
+                        dx = dropout_backward(dH, dropout_cache)
+                        dbn, dgamma, dbeta = batchnorm_relu_backward(dx, bn_relu_cache)
+                        dH, dW, db = affine_backward(dbn, fc_cache)
+                        grads['gamma'+str(l)] = dgamma
+                        grads['beta'+str(l)] = dbeta
+                    else:
+                        #---------------------------------------------------
+                        # Batch Normalization + ReLU
+                        #---------------------------------------------------
+                        fc_cache, bn_relu_cache = forward_cache[l]
+                        dbn, dgamma, dbeta = batchnorm_relu_backward(dH, bn_relu_cache)
+                        dH, dW, db = affine_backward(dbn, fc_cache)
+                        grads['gamma'+str(l)] = dgamma
+                        grads['beta'+str(l)] = dbeta
                 else:
-                    #---------------------------------------------------
-                    # ReLU
-                    #---------------------------------------------------
-                    dH, dW, db = affine_relu_backward(dH, forward_cache[l])
+                    if self.use_dropout:
+                        #---------------------------------------------------
+                        # ReLU + Dropout
+                        #---------------------------------------------------
+                        fc_cache, bn_relu_cache, dropout_cache = forward_cache[l]
+                        dx = dropout_backward(dH, dropout_cache)
+                        dH, dW, db = affine_relu_backward(dx, (fc_cache, bn_relu_cache))
+                    else:
+                        #---------------------------------------------------
+                        # ReLU
+                        #---------------------------------------------------
+                        dH, dW, db = affine_relu_backward(dH, forward_cache[l])
             #-----------------------------------------------------------
             # Add regularization gradient contribution (same factor of 0.5)
             #-----------------------------------------------------------
