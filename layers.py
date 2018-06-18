@@ -438,7 +438,31 @@ def conv_forward_naive(x, w, b, conv_param):
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
-    pass
+    N, C, H1, W1 = x.shape       # C: Number of Channels (Depth of the image)
+    F, C, HH, WW = w.shape       # F: Number of Filters (also called K; D2 = K)
+    S = conv_param['stride']     # Receptive Field (C, HH, WW); size: (HH, WW)
+    P = conv_param['pad']
+
+    H2 = int(1 + (H1 + 2 * P - HH) / S)
+    W2 = int(1 + (W1 + 2 * P - WW) / S)
+    out = np.zeros((N, F, H2, W2))
+
+    zero_pad = ((0,0), (0,0), (P,P), (P,P))
+    #  x:         N      C      H1     W1        Zero-pad only (H1, W1) of x
+    X_pad = np.pad(x, zero_pad, 'constant', constant_values=0)
+
+    for n in range(N):
+        for f in range(F):
+            for h in range(H2):
+                h_sta = h * S
+                h_end = h_sta + HH
+                for v in range(W2):
+                    v_sta = v * S
+                    v_end = v_sta + WW
+                    receptive_field = X_pad[n,:,h_sta:h_end,v_sta:v_end]
+                    out[n,f,h,v] = np.sum(receptive_field * w[f,:,:,:]) + b[f]
+                    #print('n:%d  filter:%d  receptive_field:%s  filter_w%d:%s' % 
+                    #    (n, f, str(receptive_field.shape), f, str(w[f,:,:,:].shape)))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -463,7 +487,37 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    x, w, b, conv_param = cache
+    N, C, H1, W1 = x.shape
+    F, C, HH, WW = w.shape
+    S = conv_param['stride']
+    P = conv_param['pad']
+
+    H2 = int(1 + (H1 + 2 * P - HH) / S)
+    W2 = int(1 + (W1 + 2 * P - WW) / S)
+
+    zero_pad = ((0,0), (0,0), (P,P), (P,P))
+    X_pad = np.pad(x, zero_pad, 'constant', constant_values=0)
+
+    dx = np.zeros_like(x)
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
+    dx_pad = np.zeros_like(X_pad)   # Gradient of x including the pooling zero's.
+
+    for n in range(N):
+        for f in range(F):
+            for h in range(H2):
+                h_sta = h * S
+                h_end = h_sta + HH
+                for v in range(W2):
+                    v_sta = v * S
+                    v_end = v_sta + WW
+                    dx_pad[n,:,h_sta:h_end,v_sta:v_end] += 1. * w[f,:,:,:] * dout[n,f,h,v]  # dout/dx
+                    receptive_field = X_pad[n,:,h_sta:h_end,v_sta:v_end]
+                    dw[f,:,:,:] += receptive_field * 1. * dout[n,f,h,v]   # dout/dw
+                    db[f] += 1. * dout[n,f,h,v]  # dout/db
+
+    dx = dx_pad[:,:,P:-P,P:-P]   # Remove the pooling zero's in dout/dx.
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
