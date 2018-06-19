@@ -1,4 +1,5 @@
 build/*
+__pycache__/*
 im2col_cython.c
 im2col_cython.so
 *.pyc

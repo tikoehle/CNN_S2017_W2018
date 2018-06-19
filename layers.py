@@ -543,7 +543,29 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # TODO: Implement the max pooling forward pass                            #
     ###########################################################################
-    pass
+    N, C, H1, W1 = x.shape
+    HH = pool_param['pool_height']
+    WW = pool_param['pool_width']
+    S = pool_param['stride']
+
+    H2 = int(1 + (H1 - HH) / S)
+    W2 = int(1 + (W1 - WW) / S)
+    F = D = C   # F: number of filters; D remains unchanged with max pooling
+
+    out = np.zeros((N, F, H2, W2))  # Downsampling the image to H2 x W2 (not D)
+    for n in range(N):
+        for f in range(F):
+            for h in range(H2):
+                h_sta = h * S
+                h_end = h_sta + HH
+                for v in range(W2):
+                    v_sta = v * S
+                    v_end = v_sta + WW
+                    receptive_field = x[n,f,h_sta:h_end,v_sta:v_end]
+                    max_pool = np.max(receptive_field)                    # (1)
+                    out[n,f,h,v] = max_pool
+                    #print('n:%d  filter:%d  h_sta:%d  h_end:%d  v_sta:%d  v_end:%d  receptive_field:%s  max_pool:%f' % 
+                    #    (n, f, h_sta, h_end, v_sta, v_end, str(receptive_field.shape), max_pool))
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -566,7 +588,41 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the max pooling backward pass                           #
     ###########################################################################
-    pass
+    x, pool_param = cache
+    N, C, H1, W1 = x.shape
+    HH = pool_param['pool_height']
+    WW = pool_param['pool_width']
+    S = pool_param['stride']
+
+    H2 = int(1 + (H1 - HH) / S)
+    W2 = int(1 + (W1 - WW) / S)
+    F = D = C
+
+    dx = np.zeros_like(x)
+
+    for n in range(N):
+        for f in range(F):
+            for h in range(H2):
+                h_sta = h * S
+                h_end = h_sta + HH
+                for v in range(W2):
+                    v_sta = v * S
+                    v_end = v_sta + WW
+                    receptive_field = x[n,f,h_sta:h_end,v_sta:v_end]
+                    #-------------------------------------------------------------------------
+                    # (1) Backward pass for the np.max() operation:
+                    #     Routing the gradient to the input that had the highest value in the 
+                    #     forward pass.
+                    #-------------------------------------------------------------------------
+                    # (1.1) Get the index of the max_pool element in the receptive_field matrix.
+                    #       (sometimes also called "the switch")
+                    i, j = np.unravel_index(np.argmax(receptive_field, axis=None), receptive_field.shape)
+                    # (1.2) Create a all zeros matrix like receptive_field. 
+                    dxx = np.zeros_like(receptive_field)
+                    # (1.3) Route (store) the gradient to the index (i, j) of the max_pool element of the forwarding path.
+                    dxx[i,j] = dout[n,f,h,v]
+                    # (1.4) Store the gradient matrix dxx in dx.
+                    dx[n,f,h_sta:h_end,v_sta:v_end] = dxx
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
