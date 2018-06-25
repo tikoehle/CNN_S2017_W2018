@@ -48,7 +48,52 @@ class ThreeLayerConvNet(object):
         # hidden affine layer, and keys 'W3' and 'b3' for the weights and biases   #
         # of the output affine layer.                                              #
         ############################################################################
-        pass
+        #---------------------------------------------------------------------------
+        # Layer 1
+        #---------------------------------------------------------------------------
+        # CONV input dimensions
+        #---------------------------------------------------------------------------
+        F = num_filters
+        C = input_dim[0]
+        HH = WW = filter_size
+        self.params['W1'] = weight_scale * np.random.randn(F, C, HH, WW)
+        self.params['b1'] = np.zeros(F,)
+        #---------------------------------------------------------------------------
+        # Layer 2
+        #---------------------------------------------------------------------------
+        # CONV output dimensions
+        #---------------------------------------------------------------------------
+        HH = WW = filter_size
+        P = (filter_size - 1) // 2                 # conv_param['pad']
+        S = 1                                      # conv_param['stride']
+        W1 = input_dim[1]
+        H1 = input_dim[2]
+        K = num_filters
+        H2 = int(1 + (H1 + 2 * P - HH) / S)
+        W2 = int(1 + (W1 + 2 * P - WW) / S)
+        D2 = K
+        #---------------------------------------------------------------------------
+        # max_pool output dimensions
+        #---------------------------------------------------------------------------
+        HH = 2                                     # pool_param['pool_height']
+        WW = 2                                     # pool_param['pool_width']
+        S = 2                                      # pool_param['stride']
+        H3 = int(1 + (H2 - HH) / S)
+        W3 = int(1 + (W2 - WW) / S)
+        D3 = D2                                    # D remains unchanged with max pooling
+        fan_in = W3 * H3 * D3                      # max_pool output dimensions
+        fan_out = hidden_dim
+        self.params['W2'] = weight_scale * np.random.randn(fan_in, fan_out)
+        self.params['b2'] = np.zeros((1, fan_out))
+        #---------------------------------------------------------------------------
+        # Layer 3
+        #---------------------------------------------------------------------------
+        # Affine output layer
+        #---------------------------------------------------------------------------
+        fan_in = hidden_dim
+        fan_out = num_classes
+        self.params['W3'] = weight_scale * np.random.randn(fan_in, fan_out)
+        self.params['b3'] = np.zeros((1, fan_out))
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -80,7 +125,9 @@ class ThreeLayerConvNet(object):
         # computing the class scores for X and storing them in the scores          #
         # variable.                                                                #
         ############################################################################
-        pass
+        CNN, CNN_cache = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+        H1, H1_cache = affine_relu_forward(CNN, W2, b2)
+        scores, OUT_cache = affine_forward(H1, W3, b3)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -95,7 +142,36 @@ class ThreeLayerConvNet(object):
         # data loss using softmax, and make sure that grads[k] holds the gradients #
         # for self.params[k]. Don't forget to add L2 regularization!               #
         ############################################################################
-        pass
+        #-----------------------------------------------------------
+        # Compute the loss
+        #-----------------------------------------------------------
+        # dscores: Derivative of the Softmax/CE layer:  dCE/dP * dP/dscores
+        data_loss, dscores = softmax_loss(scores, y)
+        # L2 regularization includes the convenience factor of 0.5
+        reg_loss = 0.5 * self.reg * np.sum(W1 * W1) + 0.5 * self.reg * np.sum(W2 * W2) + 0.5 * self.reg * np.sum(W3 * W3)
+        loss = data_loss + reg_loss
+        #-----------------------------------------------------------
+        # Backpropate the gradient to the parameters
+        #-----------------------------------------------------------
+        dH1, dW3, db3 = affine_backward(dscores, OUT_cache)
+        dCNN, dW2, db2 = affine_relu_backward(dH1, H1_cache)
+        _, dW1, db1 = conv_relu_pool_backward(dCNN, CNN_cache)
+        #-----------------------------------------------------------
+        # Add regularization gradient contribution
+        #-----------------------------------------------------------
+        # Derivatives of the reg_loss with convenience factor of 0.5
+        dW3 += self.reg * W3
+        dW2 += self.reg * W2
+        dW1 += self.reg * W1
+        #-----------------------------------------------------------
+        # Store the Gradients
+        #-----------------------------------------------------------
+        grads['W1'] = dW1
+        grads['b1'] = db1
+        grads['W2'] = dW2
+        grads['b2'] = db2
+        grads['W3'] = dW3
+        grads['b3'] = db3
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
