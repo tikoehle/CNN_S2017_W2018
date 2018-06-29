@@ -660,7 +660,12 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
+    # NOTE: Hint from Course Instructor: Need to reshape the spatial dimensions.
+    # https://www.reddit.com/r/cs231n/comments/443y2g/hints_for_a2/?st=j7ycdnkr&sh=a4775a0c
+    N, C, H, W = x.shape
+    xx = x.transpose(0, 2, 3, 1).reshape((N*H*W), C)          # after transpose: (N, H, W, C); xx: ((N*H*W), C)
+    a, cache = batchnorm_forward(xx, gamma, beta, bn_param)   # a: ((N*H*W), C)
+    out = np.reshape(a, (N, H, W, C)).transpose(0, 3, 1, 2)   # after reshape: (N, H, W, C); after transpose: (N, C, H, W)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -690,7 +695,11 @@ def spatial_batchnorm_backward(dout, cache):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
+    # TIMO: Same transpose/reshape dimension as used in spatial_batchnorm_forward.
+    N, C, H, W = dout.shape
+    xx = dout.transpose(0, 2, 3, 1).reshape((N*H*W), C)
+    a, dgamma, dbeta = batchnorm_backward(xx, cache)
+    dx = np.reshape(a, (N, H, W, C)).transpose(0, 3, 1, 2)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
