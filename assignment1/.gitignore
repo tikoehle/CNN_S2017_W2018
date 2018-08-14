@@ -1,0 +1,7 @@
+*.swp
+*.pyc
+.env/*
+*.html
+__pycache__/
+Image_Classification_kNN_SVM_Softmax_Neural_Network_files/
+
