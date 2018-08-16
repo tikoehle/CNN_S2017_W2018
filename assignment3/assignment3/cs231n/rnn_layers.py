@@ -34,8 +34,13 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # hidden state and any values you need for the backward pass in the next_h   #
     # and cache variables respectively.                                          #
     ##############################################################################
-    next_h = np.tanh(np.dot(x, Wx) + np.dot(prev_h, Wh) + b)
-    cache = (x, prev_h, Wx, Wh, next_h)
+    # Note: dot multiplication is not commutative: A.dot(B) != B.dot(A)
+    Wxx = np.dot(x, Wx)                     # (1)
+    Whh = np.dot(prev_h, Wh)                # (2)
+    tanh = Wxx + Whh + b                    # (3)
+    next_h = np.tanh(tanh)                  # (4)
+
+    cache = (x, tanh, prev_h, Wx, Wh)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -64,7 +69,16 @@ def rnn_step_backward(dnext_h, cache):
     # HINT: For the tanh function, you can compute the local derivative in terms #
     # of the output value from tanh.                                             #
     ##############################################################################
-    pass
+    x, tanh, prev_h, Wx, Wh = cache
+
+    dtanh = dnext_h / (np.cosh(tanh)**2)    # (4)   dnext_h/dtanh
+    db = np.sum(dtanh, axis=0)              # (3.3) dtanh/db
+    dWhh = dtanh                            # (3.2) dtanh/dWhh
+    dWxx = dtanh                            # (3.1) dtanh/dWxx
+    dWh = np.dot(prev_h.T, dWhh)            # (2.2) dWhh/dWh
+    dprev_h = np.dot(dWhh, Wh.T)            # (2.1) dWhh/dprev_h <-- the "expensive" gradient highway: multiplies by Wh.T
+    dWx = np.dot(x.T, dWxx)                 # (1.2) dWxx/dWx
+    dx = np.dot(dWxx, Wx.T)                 # (1.1) dWxx/dx
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
