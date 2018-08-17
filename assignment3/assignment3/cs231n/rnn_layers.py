@@ -147,7 +147,36 @@ def rnn_backward(dh, cache):
     # sequence of data. You should use the rnn_step_backward function that you   #
     # defined above. You can use a for loop to help compute the backward pass.   #
     ##############################################################################
-    pass
+    N, T, H = dh.shape
+
+    # Initial derivative of ht is the upstream gradient of the last time step dh[:,-1,:].
+    dx, dprev_h, dWx, dWh, db = rnn_step_backward(dh[:,-1,:], cache[list(cache.keys())[-1]])
+
+    # Next, walk the computational graph from the second last time step t to h0.
+    for t in reversed(range(T-1)):
+
+        # The gradient input for h at time step t is the sum of the gradients of
+        # the individual loss functions (dh) and the computed upstream gradient 
+        # of h (dprev_h).
+        dupstream = dh[:,t,:] + dprev_h
+        _dx, dprev_h, _dWx, _dWh, _db = rnn_step_backward(dupstream, cache[t])
+
+        # Stack each time step dx in a sequence along a 3rd dimension.
+        dx  = np.dstack((dx, _dx))
+
+        # Sum up these gradients.
+        dWx += _dWx
+        dWh += _dWh
+        db  += _db
+
+    # Reverse the stacked sequence of dx along the sequence axis.
+    dx = dx[:,:,::-1]
+
+    # And transpose the result from (N, D, T) to (N, T, D).
+    dx = dx.transpose(0,2,1)
+
+    # rnn_step_backward() returns the final gradient for h at time step t0.
+    dh0 = dprev_h
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
