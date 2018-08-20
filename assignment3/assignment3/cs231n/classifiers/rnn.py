@@ -140,7 +140,37 @@ class CaptioningRNN(object):
         # Note also that you are allowed to make use of functions from layers.py   #
         # in your implementation, if needed.                                       #
         ############################################################################
-        pass
+
+        #---------------------------------------------------------------------------
+        # Forward pass
+        #---------------------------------------------------------------------------
+        h1, affine_h1_cache           = affine_forward(features, W_proj, b_proj)             # (1)
+        wordvec, word_embed_cache     = word_embedding_forward(captions_in, W_embed)         # (2)
+        if self.cell_type == 'rnn':
+            ht, rnn_fwd_cache         = rnn_forward(wordvec, h1, Wx, Wh, b)                  # (3)
+        scores, scores_cache          = temporal_affine_forward(ht, W_vocab, b_vocab)        # (4)
+        loss, dscores                 = temporal_softmax_loss(scores, captions_out,
+                                                                mask, verbose=False)         # (5)
+
+        #---------------------------------------------------------------------------
+        # Backward pass
+        #---------------------------------------------------------------------------
+        dht, dW_vocab, db_vocab       = temporal_affine_backward(dscores, scores_cache)      # (4)
+        dwordvec, dh1, dWx, dWh, db   = rnn_backward(dht, rnn_fwd_cache)                     # (3)
+        dW_embed                      = word_embedding_backward(dwordvec, word_embed_cache)  # (2)
+        dfeatures, dW_proj, db_proj   = affine_backward(dh1, affine_h1_cache)                # (1)
+
+        grads['W_vocab'] = dW_vocab   # dscores/dW_hy
+        grads['b_vocab'] = db_vocab   # dscores/db_y
+
+        grads['Wx'] = dWx             # dht/dW_xh
+        grads['Wh'] = dWh             # dht/dW_hh
+        grads['b'] = db               # dht/db_h
+
+        grads['W_embed'] = dW_embed   # dwordvec/dW_embed
+
+        grads['W_proj'] = dW_proj     # dh1/dW_proj
+        grads['b_proj'] = db_proj     # dh1/db_proj
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
