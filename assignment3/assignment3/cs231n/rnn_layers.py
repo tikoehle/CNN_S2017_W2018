@@ -290,7 +290,17 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     # TODO: Implement the forward pass for a single timestep of an LSTM.        #
     # You may want to use the numerically stable sigmoid implementation above.  #
     #############################################################################
-    pass
+    a = np.dot(x, Wx)+ np.dot(prev_h, Wh) + b     # (1) Activation vector a [4H]
+    a_i, a_f, a_o, a_g = np.split(a, 4, axis=1)   # (2) Split a into 4 vectors of size [H]
+    i = sigmoid(a_i)                              # (3) Compute the 4 gates of size [H]
+    f = sigmoid(a_f)
+    o = sigmoid(a_o)
+    g = np.tanh(a_g)
+    next_c = f * prev_c + i * g                   # (4) Next cell state
+    tanh = np.tanh(next_c)                        # (5)
+    next_h = o * tanh                             # (6) Next hidden state
+
+    cache = (x, i, f, o, g, a_i, a_f, a_o, a_g, tanh, prev_h, prev_c, next_c, Wx, Wh)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -322,7 +332,25 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     # HINT: For sigmoid and tanh you can compute local derivatives in terms of  #
     # the output value from the nonlinearity.                                   #
     #############################################################################
-    pass
+    x, i, f, o, g, a_i, a_f, a_o, a_g, tanh, prev_h, prev_c, next_c, Wx, Wh = cache
+
+    dtanh = o * dnext_h                                # (6) dnext_h/dtanh
+    do = tanh * dnext_h                                #     dnext_h/do
+    dnext_c += dtanh / (np.cosh(next_c)**2)            # (5) dtanh/dnext_c <-- Note: sum up the gradients for ct
+    df = prev_c * dnext_c                              # (4) dnext_c/df
+    dprev_c = f * dnext_c                              #     dnext_c/dprev_c <-- the "fast" gradient highway: multiply by f
+    di = g * dnext_c                                   #     dnext_c/di
+    dg = i * dnext_c                                   #     dnext_c/dg
+    da_g = dg / (np.cosh(a_g)**2)                      # (3) dg/da_g
+    da_o = np.exp(-a_o) / ((1 + np.exp(-a_o))**2) * do #     do/da_o
+    da_f = np.exp(-a_f) / ((1 + np.exp(-a_f))**2) * df #     df/da_f
+    da_i = np.exp(-a_i) / ((1 + np.exp(-a_i))**2) * di #     di/da_i
+    da = np.hstack((da_i, da_f, da_o, da_g))           # (2) da = hstack(da_i, da_f, da_o, da_g)
+    dx = np.dot(da, Wx.T)                              # (1) da/dx
+    dWx = np.dot(x.T, da)                              #     da/dWx
+    dprev_h = np.dot(da, Wh.T)                         #     da/dprev_h
+    dWh = np.dot(prev_h.T, da)                         #     da/dWh
+    db = np.sum(da, axis=0)                            #     da/db
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
