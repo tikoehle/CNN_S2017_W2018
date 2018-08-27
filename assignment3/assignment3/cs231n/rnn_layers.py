@@ -71,7 +71,7 @@ def rnn_step_backward(dnext_h, cache):
     ##############################################################################
     x, tanh, prev_h, Wx, Wh = cache
 
-    dtanh = dnext_h / (np.cosh(tanh)**2)    # (4)   dnext_h/dtanh
+    dtanh = (1 - np.square(np.tanh(tanh))) * dnext_h  # (4)   dnext_h/dtanh
     db = np.sum(dtanh, axis=0)              # (3.3) dtanh/db
     dWhh = dtanh                            # (3.2) dtanh/dWhh
     dWxx = dtanh                            # (3.1) dtanh/dWxx
@@ -336,15 +336,15 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
 
     dtanh = o * dnext_h                                # (6) dnext_h/dtanh
     do = tanh * dnext_h                                #     dnext_h/do
-    dnext_c += dtanh / (np.cosh(next_c)**2)            # (5) dtanh/dnext_c <-- Note: sum up the gradients for ct
+    dnext_c += (1 - np.square(np.tanh(next_c))) * dtanh# (5) dtanh/dnext_c <-- Note: sum up the gradients for ct
     df = prev_c * dnext_c                              # (4) dnext_c/df
     dprev_c = f * dnext_c                              #     dnext_c/dprev_c <-- the "fast" gradient highway: multiply by f
     di = g * dnext_c                                   #     dnext_c/di
     dg = i * dnext_c                                   #     dnext_c/dg
-    da_g = dg / (np.cosh(a_g)**2)                      # (3) dg/da_g
-    da_o = np.exp(-a_o) / ((1 + np.exp(-a_o))**2) * do #     do/da_o
-    da_f = np.exp(-a_f) / ((1 + np.exp(-a_f))**2) * df #     df/da_f
-    da_i = np.exp(-a_i) / ((1 + np.exp(-a_i))**2) * di #     di/da_i
+    da_g = (1 - np.square(np.tanh(a_g))) * dg          # (3) dg/da_g
+    da_o = o * (1 - o) * do                            #     do/da_o
+    da_f = f * (1 - f) * df                            #     df/da_f
+    da_i = i * (1 - i) * di                            #     di/da_i
     da = np.hstack((da_i, da_f, da_o, da_g))           # (2) da = hstack(da_i, da_f, da_o, da_g)
     dx = np.dot(da, Wx.T)                              # (1) da/dx
     dWx = np.dot(x.T, da)                              #     da/dWx
