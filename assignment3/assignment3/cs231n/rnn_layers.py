@@ -385,7 +385,15 @@ def lstm_forward(x, h0, Wx, Wh, b):
     # TODO: Implement the forward pass for an LSTM over an entire timeseries.   #
     # You should use the lstm_step_forward function that you just defined.      #
     #############################################################################
-    pass
+    cache = {}
+    N, T, H = x.shape[0], x.shape[1], h0.shape[1]
+    h = np.zeros((N,T,H))
+    prev_h = h0
+    prev_c = np.zeros((N,H))       # Note, the initial cell state is set to zero.
+    for t in range(T):
+        h[:,t,:], next_c, cache[t] = lstm_step_forward(x[:,t,:], prev_h, prev_c, Wx, Wh, b)
+        prev_h = h[:,t,:]
+        prev_c = next_c            # Also note that the cell state is internal.
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -413,7 +421,38 @@ def lstm_backward(dh, cache):
     # TODO: Implement the backward pass for an LSTM over an entire timeseries.  #
     # You should use the lstm_step_backward function that you just defined.     #
     #############################################################################
-    pass
+    N, T, H = dh.shape
+
+    # This is almost the same as rnn_backward() except for the cell state dprev_c
+    # which must be initialized to zero also in the backward step.
+    dprev_c = np.zeros((N,H))
+    dx, dprev_h, dprev_c, dWx, dWh, db = lstm_step_backward(dh[:,T-1,:], dprev_c, cache[T-1])
+
+    # Next, walk the computational graph from the second last time step t to t0.
+    for t in reversed(range(T-1)):
+
+        # The gradient input for h at time step t is the sum of the gradients of
+        # the individual loss functions (dh) and the computed upstream gradient
+        # of h (dprev_h).
+        dupstream = dh[:,t,:] + dprev_h
+        _dx, dprev_h, dprev_c, _dWx, _dWh, _db = lstm_step_backward(dupstream, dprev_c, cache[t])
+
+        # Stack each time step dx in a sequence along a 3rd dimension.
+        dx  = np.dstack((dx, _dx))
+
+        # Sum up these gradients.
+        dWx += _dWx
+        dWh += _dWh
+        db  += _db
+
+    # Reverse the stacked sequence of dx along the sequence axis.
+    dx = dx[:,:,::-1]
+
+    # And transpose the result from (N, D, T) to (N, T, D).
+    dx = dx.transpose(0,2,1)
+
+    # rnn_step_backward() returns the final gradient for h at time step t0.
+    dh0 = dprev_h
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
