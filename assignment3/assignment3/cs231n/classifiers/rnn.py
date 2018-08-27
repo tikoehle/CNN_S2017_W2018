@@ -251,25 +251,37 @@ class CaptioningRNN(object):
         #---------------------------------------------------------------------------
         # Implementation 1: Vectorized, calling the function rnn_forward.
         #---------------------------------------------------------------------------
+        '''
         h0, _ = affine_forward(features, W_proj, b_proj)             # (1)
         word_vec, _ = word_embedding_forward(x0, W_embed)            # (2)
-        ht, _ = rnn_forward(word_vec, h0, Wx, Wh, b)                 # (3)
+
+        if self.cell_type == 'rnn':
+            ht, _ = rnn_forward(word_vec, h0, Wx, Wh, b)             # (3)
+        elif self.cell_type == 'lstm':
+            # The cell state is initialized to zero in lstm_forward().
+            ht, _ = lstm_forward(word_vec, h0, Wx, Wh, b)            # (3)
+
         scores, _ = temporal_affine_forward(ht, W_vocab, b_vocab)
         captions = np.argmax(scores, axis=2)                         # (4)
-
+        '''
         #---------------------------------------------------------------------------
         # Implementation 2: Call rnn_step_forward() in a loop.
         #---------------------------------------------------------------------------
-        '''
         V = W_vocab.shape[1]
         scores = np.zeros((N,T,V))
         h, _ = affine_forward(features, W_proj, b_proj)              # (1)
+        next_c = np.zeros_like(h) # LSTM: initialize the cell state to zero.
+
         word_vec, _ = word_embedding_forward(x0, W_embed)            # (2)
         for t in range(T):
-            h, _ = rnn_step_forward(word_vec[:,t,:], h, Wx, Wh, b)   # (3)
+
+            if self.cell_type == 'rnn':
+                h, _ = rnn_step_forward(word_vec[:,t,:], h, Wx, Wh, b)   # (3)
+            elif self.cell_type == 'lstm':
+                h, next_c, _ = lstm_step_forward(word_vec[:,t,:], h, next_c, Wx, Wh, b) # (3)
+
             scores[:,t,:] = h.dot(W_vocab) + b_vocab
         captions = np.argmax(scores, axis=2)                         # (4)
-        '''
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
