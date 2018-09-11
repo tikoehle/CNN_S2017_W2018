@@ -34,5 +34,15 @@ Q5: PyTorch / TensorFlow on CIFAR-10 (10 points)
 ```
 ## Assignment 3 - Spring 2018 Solutions
 ```
-- in progress-
+Q1: Image Captioning with Vanilla RNNs (25 points)
+    RNN_Captioning.ipynb
+Q2: Image Captioning with LSTMs (30 points)
+    LSTM_Captioning.ipynb
+Q3: Network Visualization: Saliency maps, Class Visualization, and Fooling Images (15 points)
+    NetworkVisualization-PyTorch.ipynb
+Q4: Style Transfer (15 points)
+    StyleTransfer-PyTorch.ipynb
+Q5: Generative Adversarial Networks (15 points)
+    GANs-PyTorch.ipynb
 ```
+A1 - A3 done. 11 Sep 2018
